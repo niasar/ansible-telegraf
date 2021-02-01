@@ -142,6 +142,11 @@
 
   when: "'docker' in telegraf_plugins_extra and not telegraf_agent_docker"
 
+- name: Install sudo if smart plugin is used
+  packege:
+    name: sudo
+  when: "'smart' in telegraf_extra_plugins and not telegraf_agent_docker"
+
 - name: Configure system for for smart plugin
   block:
     - name: Install smartmontools
@@ -168,6 +173,33 @@
         - Restart Telegraf
 
   when: "'smart' in telegraf_plugins_extra and not telegraf_agent_docker"
+
+- name: Configure system with nvme drive for smart plugin
+  block:
+    - name: Install nvme-cli
+      become: true
+      package:
+        name: nvme-cli
+    
+    - name: Find path of nvme
+      command: which nvme
+      register: which_nvme
+      ignore_errors: true
+      changed_when: false
+      become: true
+    
+    - name: Ensure telegraf user can execute nvme
+      blockinfile:
+        marker: "# {mark} ANSIBLE MANAGED BLOCK (Ensure telegraf user can execute nvme)"
+        dest: "/etc/sudoers.d/telegraf"
+        block: "telegraf ALL=(root) NOPASSWD: {{ which_nvme.stdout }}"
+        mode: 0400
+        create: true
+      become: true
+      notify:
+        - Restart Telegraf
+
+  when: "'smart' in telegraf_plugins_extra and 'nvme0n1' in ansible_devices and not telegraf_agent_docker"
 
 - name: Configure system for for sensors plugin
   block:
